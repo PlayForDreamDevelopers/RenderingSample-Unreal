@@ -10,6 +10,7 @@
 
 DECLARE_DELEGATE_TwoParams(FYvrCreateAnchorEntityDelegate, EYvrResult, UYvrAnchorComponent*);
 //DECLARE_DELEGATE_OneParam(FYvrDestroyAnchorEntityDelegate, EYvrResult);
+DECLARE_DELEGATE_OneParam(FYvrSetSpaceComponentStatusDelegate, EYvrResult);
 DECLARE_DELEGATE_TwoParams(FYvrSaveAnchorEntityDelegate, EYvrResult, UYvrAnchorComponent*);
 DECLARE_DELEGATE_TwoParams(FYvrEraseAnchorEntityDelegate, EYvrResult, UYvrAnchorComponent*);
 //DECLARE_DELEGATE_OneParam(FYvrClearAnchorEntityDelegate, EYvrResult);
@@ -29,6 +30,7 @@ public:
 
 	bool CreateAnchorEntity(AActor* BindingActor, const FTransform& AnchorEntityTransform, float Timeout, const FYvrCreateAnchorEntityDelegate& Delegate);
 	//bool DestroyAnchorEntity(AActor* BoundActor, const FYvrDestroyAnchorEntityDelegate& Delegate);
+	bool SetSpaceComponentStatus(UYvrAnchorComponent* AnchorComponent, EYvrSaveLocation SaveLocation, const FYvrSaveAnchorEntityDelegate& Delegate);
 	bool SaveAnchorEntity(UYvrAnchorComponent* AnchorComponent, EYvrSaveLocation SaveLocation, const FYvrSaveAnchorEntityDelegate& Delegate);
 	bool EraseAnchorEntity(UYvrAnchorComponent* AnchorComponent, EYvrSaveLocation SaveLocation, const FYvrEraseAnchorEntityDelegate& Delegate);
 	//bool ClearAnchorEntity(EYvrSaveLocation SaveLocation, const FYvrClearAnchorEntityDelegate& Delegate);
@@ -47,6 +49,7 @@ private:
 	~FYvrAnchorManager();
 
 	DECLARE_MULTICAST_DELEGATE_FourParams(FYvrCreateAnchorEntityEventDelegate, uint64_t, XrResult, const FYvrAnchor&, const FYvrAnchorUUID&);
+	DECLARE_MULTICAST_DELEGATE_TwoParams(FYvrSetSpaceComponentStatusEventDelegate, uint64_t, XrResult);
 	DECLARE_MULTICAST_DELEGATE_ThreeParams(FYvrSaveAnchorEntityEventDelegate, uint64_t, XrResult, EYvrSaveLocation);
 	DECLARE_MULTICAST_DELEGATE_ThreeParams(FYvrEraseAnchorEntityEventDelegate, uint64_t, XrResult, EYvrSaveLocation);
 	//DECLARE_MULTICAST_DELEGATE_ThreeParams(FYvrClearAnchorEntityEventDelegate, uint64_t, EYvrResult, EYvrSaveLocation);
@@ -54,6 +57,7 @@ private:
 	DECLARE_MULTICAST_DELEGATE_TwoParams(FYvrStartSpatialSceneCaptureEventDelegate, uint64_t, XrResult);
 
 	FYvrCreateAnchorEntityEventDelegate CreateAnchorEntityEventDelegate;
+	FYvrSetSpaceComponentStatusEventDelegate SetSpaceComponentStatusEventDelegate;
 	FYvrSaveAnchorEntityEventDelegate SaveAnchorEntityEventDelegate;
 	FYvrEraseAnchorEntityEventDelegate EraseAnchorEntityEventDelegate;
 	//FYvrClearAnchorEntityEventDelegate ClearAnchorEntityEventDelegate;
@@ -66,8 +70,10 @@ private:
 	//FDelegateHandle HandleOfClearAnchorEntity;
 	FDelegateHandle HandleOfLoadAnchorEntity;
 	FDelegateHandle HandleOfStartSpatialSceneCapture;
+	FDelegateHandle HandleOfSetSpaceComponentStatus;
 
 	void HandleCreateAnchorEntityEvent(uint64_t AsyncTaskId, XrResult Result, const FYvrAnchor& AnchorHandle, const FYvrAnchorUUID& AnchorUUID);
+	void HandleSetSpaceComponentStatusEvent(uint64_t AsyncTaskId, XrResult Result);
 	void HandleSaveAnchorEntityEvent(uint64_t AsyncTaskId, XrResult Result, EYvrSaveLocation SaveLocation);
 	void HandleEraseAnchorEntityEvent(uint64_t AsyncTaskId, XrResult Result, EYvrSaveLocation SaveLocation);
 	//void HandleClearAnchorEntityEvent(uint64_t AsyncTaskId, EYvrResult Result, EYvrSaveLocation SaveLocation);
@@ -88,6 +94,14 @@ private:
 		uint64_t AsyncTaskId;
 		FYvrCreateAnchorEntityDelegate Delegate;
 		UYvrAnchorComponent* AnchorComponent;
+	};
+
+	struct FComponentStatusInfo
+	{
+		uint64_t AsyncTaskId;
+		FYvrSaveAnchorEntityDelegate Delegate;
+		UYvrAnchorComponent* AnchorComponent;
+		EYvrSaveLocation Location;
 	};
 
 	struct FAnchorSaveInfo
@@ -117,6 +131,7 @@ private:
 	};
 
 	TMap<uint64_t, FAnchorCreateInfo> CreateAnchorBindings;
+	TMap<uint64_t, FComponentStatusInfo> ComponentStatusBindings;
 	TMap<uint64_t, FAnchorSaveInfo> SaveAnchorsBindings;
 	TMap<uint64_t, FAnchorEraseInfo> EraseAnchorsBindings;
 	//TMap<uint64_t, FAnchorClearInfo> ClearAnchorsBindings;

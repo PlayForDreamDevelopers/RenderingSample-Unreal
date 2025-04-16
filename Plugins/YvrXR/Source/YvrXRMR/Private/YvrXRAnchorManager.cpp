@@ -5,6 +5,7 @@
 FYvrAnchorManager::FYvrAnchorManager()
 {
 	HandleOfCreateAnchorEntity = CreateAnchorEntityEventDelegate.AddRaw(this, &FYvrAnchorManager::HandleCreateAnchorEntityEvent);
+	HandleOfSetSpaceComponentStatus = SetSpaceComponentStatusEventDelegate.AddRaw(this, &FYvrAnchorManager::HandleSetSpaceComponentStatusEvent);
 	HandleOfSaveAnchorEntity = SaveAnchorEntityEventDelegate.AddRaw(this, &FYvrAnchorManager::HandleSaveAnchorEntityEvent);
 	HandleOfEraseAnchorEntity = EraseAnchorEntityEventDelegate.AddRaw(this, &FYvrAnchorManager::HandleEraseAnchorEntityEvent);
 	//HandleOfClearAnchorEntity = ClearAnchorEntityEventDelegate.AddRaw(this, &FYvrAnchorManager::HandleClearAnchorEntityEvent);
@@ -15,6 +16,7 @@ FYvrAnchorManager::FYvrAnchorManager()
 FYvrAnchorManager::~FYvrAnchorManager()
 {
 	CreateAnchorEntityEventDelegate.Remove(HandleOfCreateAnchorEntity);
+	SetSpaceComponentStatusEventDelegate.Remove(HandleOfSetSpaceComponentStatus);
 	SaveAnchorEntityEventDelegate.Remove(HandleOfSaveAnchorEntity);
 	EraseAnchorEntityEventDelegate.Remove(HandleOfEraseAnchorEntity);
 	//ClearAnchorEntityEventDelegate.Remove(HandleOfClearAnchorEntity);
@@ -84,6 +86,12 @@ void FYvrAnchorManager::PollEvent(XrEventDataBuffer EventData)
 			StartSpatialSceneCaptureEventDelegate.Broadcast(CapturedInfo.requestId, CapturedInfo.result);
 			break;
 		}
+		case XR_TYPE_EVENT_DATA_SPACE_SET_STATUS_COMPLETE_FB:            // SetSpaceComponentStatus				Event
+		{
+			const XrEventDataSpaceSetStatusCompleteFB& StateInfo = reinterpret_cast<const XrEventDataSpaceSetStatusCompleteFB&>(EventData);
+			SetSpaceComponentStatusEventDelegate.Broadcast(StateInfo.requestId, StateInfo.result);
+			break;
+		}
 		default:
 		{
 			break;
@@ -138,6 +146,45 @@ bool FYvrAnchorManager::CreateAnchorEntity(AActor* BindingActor, const FTransfor
 	TaskInfo.Delegate = Delegate;
 	TaskInfo.AnchorComponent = AnchorComponent;
 	CreateAnchorBindings.Add(AsyncTaskId, TaskInfo);
+	return true;
+}
+
+bool FYvrAnchorManager::SetSpaceComponentStatus(UYvrAnchorComponent* AnchorComponent, EYvrSaveLocation SaveLocation, const FYvrSaveAnchorEntityDelegate& Delegate)
+{
+	if (!IsValid(AnchorComponent))
+	{
+		return false;
+	}
+
+	if (!AnchorComponent->IsAnchorValid())
+	{
+		return false;
+	}
+
+	PFN_xrSetSpaceComponentStatusFB setSpaceComponentStatus;
+	XrSpaceComponentStatusSetInfoFB setInfoFB;
+	setInfoFB.type = XR_TYPE_SPACE_COMPONENT_STATUS_SET_INFO_FB;
+	setInfoFB.next = nullptr;
+	setInfoFB.componentType = XR_SPACE_COMPONENT_TYPE_STORABLE_FB;
+	setInfoFB.enabled = true;
+	setInfoFB.timeout = 0;
+	XrAsyncRequestIdFB AsyncTaskId = 0;
+	XR_ENSURE(xrGetInstanceProcAddr(YvrXRHMD->GetInstance(), "xrSetSpaceComponentStatusFB", (PFN_xrVoidFunction*)&setSpaceComponentStatus));
+
+	XrResult Result = setSpaceComponentStatus((XrSpace)AnchorComponent->GetAnchorHandle().GetValue(), &setInfoFB, &AsyncTaskId);
+
+	if (XR_FAILED(Result))
+	{
+		return false;
+	}
+
+	FComponentStatusInfo TaskInfo;
+	TaskInfo.AsyncTaskId = AsyncTaskId;
+	TaskInfo.Delegate = Delegate;
+	TaskInfo.AnchorComponent = AnchorComponent;
+	TaskInfo.Location = SaveLocation;
+
+	ComponentStatusBindings.Add(AsyncTaskId, TaskInfo);
 	return true;
 }
 
@@ -529,6 +576,25 @@ void FYvrAnchorManager::HandleCreateAnchorEntityEvent(uint64_t AsyncTaskId, XrRe
 	TaskInfo->AnchorComponent->SetAnchorUUID(AnchorUUID);
 	TaskInfo->Delegate.ExecuteIfBound(ToYvrResult(Result), TaskInfo->AnchorComponent);
 	CreateAnchorBindings.Remove(AsyncTaskId);
+}
+
+void FYvrAnchorManager::HandleSetSpaceComponentStatusEvent(uint64_t AsyncTaskId, XrResult Result)
+{
+	FComponentStatusInfo* TaskInfo = ComponentStatusBindings.Find(AsyncTaskId);
+	if (!TaskInfo)
+	{
+		return;
+	}
+
+	if (XR_FAILED(Result))
+	{
+		TaskInfo->Delegate.ExecuteIfBound(ToYvrResult(Result), nullptr);
+		ComponentStatusBindings.Remove(AsyncTaskId);
+		return;
+	}
+
+	SaveAnchorEntity(TaskInfo->AnchorComponent, TaskInfo->Location, TaskInfo->Delegate);
+	ComponentStatusBindings.Remove(AsyncTaskId);
 }
 
 void FYvrAnchorManager::HandleSaveAnchorEntityEvent(uint64_t AsyncTaskId, XrResult Result, EYvrSaveLocation SaveLocation)

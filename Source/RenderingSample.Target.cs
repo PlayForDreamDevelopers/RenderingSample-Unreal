@@ -7,8 +7,9 @@ public class RenderingSampleTarget : TargetRules
 {
 	public RenderingSampleTarget( TargetInfo Target) : base(Target)
 	{
-		Type = TargetType.Game;
-		DefaultBuildSettings = BuildSettingsVersion.V2;
+        bOverrideBuildEnvironment = true;
+        Type = TargetType.Game;
+		DefaultBuildSettings = BuildSettingsVersion.V5;
 		ExtraModuleNames.AddRange( new string[] { "RenderingSample" } );
 	}
 }

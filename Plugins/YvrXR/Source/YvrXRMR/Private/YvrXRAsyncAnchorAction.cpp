@@ -76,7 +76,8 @@ void UYvrSaveAnchorEntity_AsyncAction::Activate()
 		return;
 	}
 
-	bool bStarted = FYvrAnchorManager::GetInstance()->SaveAnchorEntity(
+
+	bool bStarted = FYvrAnchorManager::GetInstance()->SetSpaceComponentStatus(
 		AnchorComponent,
 		SaveLocation,
 		FYvrSaveAnchorEntityDelegate::CreateUObject(this, &UYvrSaveAnchorEntity_AsyncAction::HandleSaveAnchorEntityComplete)
